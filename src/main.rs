@@ -49,64 +49,45 @@ fn format_option_field(value: Option<String>, field: &str, primary_color: &Color
     }
 }
 
-fn display(lines: Vec<String>) {
-    let primary_color = Color::TrueColor {
-        r: 202,
-        g: 188,
-        b: 155,
-    };
+fn display_each(line: &str, primary_color: Color) {
+    if let Ok(log) = from_str::<Log>(line) {
+        let time = format!("[{}]", log.time).dimmed();
+        let level = get_level(log.level);
+        let target = format!(
+            "TARGET: {}",
+            // format_args!("{}", "TARGET:".dimmed()),
+            format_args!("{}", log.target)
+        )
+        .dimmed();
 
-    for line in lines {
-        match from_str::<Log>(&line) {
-            Ok(log) => {
-                let time = format!("[{}]", log.time).dimmed();
-                let level = get_level(log.level);
-                let target = format!(
-                    "TARGET: {}",
-                    // format_args!("{}", "TARGET:".dimmed()),
-                    format_args!("{}", log.target)
-                )
-                .dimmed();
+        let msg = format!(
+            "{} {}",
+            format_args!("{}", "MSG:").to_string().color(primary_color),
+            format_args!("{}", log.msg.green())
+        );
 
-                let msg = format!(
-                    "{} {}",
-                    format_args!("{}", "MSG:").to_string().color(primary_color),
-                    format_args!("{}", log.msg.green())
-                );
+        let name = format!(": {}", log.name).color(primary_color);
 
-                let name = format!(": {}", log.name).color(primary_color);
+        let http_host = format_option_field(log.http_host, "HOST", &primary_color);
+        let http_target = format_option_field(log.http_target, "ROUTE", &primary_color);
+        let http_status_code =
+            format_option_field(log.http_status_code, "STATUS CODE", &primary_color);
+        let http_took = format_option_field(
+            if log.http_took.is_some() {
+                Some(format!("{} ms", log.http_took.unwrap()))
+            } else {
+                None
+            },
+            "TOOK",
+            &primary_color,
+        );
 
-                let http_host = format_option_field(log.http_host, "HOST", &primary_color);
-                let http_target = format_option_field(log.http_target, "ROUTE", &primary_color);
-                let http_status_code =
-                    format_option_field(log.http_status_code, "STATUS CODE", &primary_color);
-                let http_took = format_option_field(
-                    if log.http_took.is_some() {
-                        Some(format!("{} ms", log.http_took.unwrap()))
-                    } else {
-                        None
-                    },
-                    "TOOK",
-                    &primary_color,
-                );
+        let formatted_log = format!(
+            "{} {}{} {} {} {} {} {} {}",
+            time, level, name, target, msg, http_host, http_target, http_status_code, http_took
+        );
 
-                let formatted_log = format!(
-                    "{} {}{} {} {} {} {} {} {}",
-                    time,
-                    level,
-                    name,
-                    target,
-                    msg,
-                    http_host,
-                    http_target,
-                    http_status_code,
-                    http_took
-                );
-
-                println!("{}", formatted_log);
-            }
-            Err(_) => continue,
-        }
+        println!("{}", formatted_log);
     }
 }
 
@@ -118,23 +99,29 @@ fn lines_from_file() -> Vec<String> {
         .collect::<Vec<String>>()
 }
 
-fn lines_from_stdin() -> Vec<String> {
-    let lines = io::stdin().lock().lines();
-    lines.map(|line| line.unwrap()).collect::<Vec<String>>()
-}
-
 fn main() {
     let args = std::env::args().collect::<Vec<_>>();
     let empty_string = &String::from("");
     let mode = args.get(1).unwrap_or(empty_string);
 
-    let lines = if mode == "-d" {
-        lines_from_file()
-    } else {
-        lines_from_stdin()
+    let primary_color = Color::TrueColor {
+        r: 202,
+        g: 188,
+        b: 155,
     };
 
-    display(lines);
+    if mode == "-d" {
+        let lines = lines_from_file();
+        for line in lines {
+            display_each(&line, primary_color);
+        }
+    } else {
+        for line in io::stdin().lock().lines() {
+            if line.is_err() {
+                continue;
+            }
 
-    std::process::exit(0);
+            display_each(&line.unwrap(), primary_color)
+        }
+    };
 }
