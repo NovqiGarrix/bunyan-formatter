@@ -1,7 +1,7 @@
 use colored::{Color, ColoredString, Colorize};
 use serde::Deserialize;
 use serde_json::from_str;
-// use std::io::{self, BufRead};
+use std::io::{self, BufRead};
 
 #[derive(Debug, Deserialize)]
 struct Log {
@@ -49,7 +49,7 @@ fn format_option_field(value: Option<String>, field: &str, primary_color: &Color
     }
 }
 
-fn print(lines: Vec<&str>) {
+fn display(lines: Vec<String>) {
     let primary_color = Color::TrueColor {
         r: 202,
         g: 188,
@@ -57,7 +57,7 @@ fn print(lines: Vec<&str>) {
     };
 
     for line in lines {
-        match from_str::<Log>(line) {
+        match from_str::<Log>(&line) {
             Ok(log) => {
                 let time = format!("[{}]", log.time).dimmed();
                 let level = get_level(log.level);
@@ -110,15 +110,31 @@ fn print(lines: Vec<&str>) {
     }
 }
 
-fn main() {
-    // For testing: Read the log from file
-
+fn lines_from_file() -> Vec<String> {
     let lines_in_string = std::fs::read_to_string("error.log").expect("Can't read 'error.log'");
-    let lines = lines_in_string.lines().collect::<Vec<&str>>();
+    lines_in_string
+        .lines()
+        .map(|line| line.to_owned())
+        .collect::<Vec<String>>()
+}
 
-    // let stdin = io::stdin();
+fn lines_from_stdin() -> Vec<String> {
+    let lines = io::stdin().lock().lines();
+    lines.map(|line| line.unwrap()).collect::<Vec<String>>()
+}
 
-    print(lines);
+fn main() {
+    let args = std::env::args().collect::<Vec<_>>();
+    let empty_string = &String::from("");
+    let mode = args.get(1).unwrap_or(empty_string);
+
+    let lines = if mode == "-d" {
+        lines_from_file()
+    } else {
+        lines_from_stdin()
+    };
+
+    display(lines);
 
     std::process::exit(0);
 }
